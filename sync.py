@@ -211,11 +211,12 @@ class GLPIClient:
         except requests.HTTPError as exc:
             detail = describe_http_error(response)
             if detail:
-                # Omit the full URL to avoid leaking the hostname in logs
+                # Omit the full URL to avoid leaking the hostname in logs, and don't re-raise from exc
                 raise requests.HTTPError(
                     f"{response.status_code} Error on {method} {path}. GLPI response: {detail}"
-                ) from exc
-            raise
+                )
+            # If no detail, raise a generic one to hide the URL
+            raise requests.HTTPError(f"{response.status_code} Error on {method} {path}")
         return response
 
     def init_session(self) -> None:
