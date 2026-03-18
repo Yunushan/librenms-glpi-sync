@@ -491,6 +491,16 @@ def main() -> int:
     try:
         glpi.set_active_profile()
         glpi.set_active_entity()
+        
+        # DEBUG LOGGING FOR API PERMISSIONS:
+        try:
+            active_profile = glpi._request("GET", "/apirest.php/getActiveProfile/").json()
+            active_entities = glpi._request("GET", "/apirest.php/getActiveEntities/").json()
+            logging.info("DEBUG Active Profile: ID %s, Name %s", active_profile.get("id"), active_profile.get("name"))
+            logging.info("DEBUG Active Entities: %s", json.dumps(active_entities)[:200])
+        except Exception as e:
+            logging.warning("Could not fetch debug info: %s", e)
+            
         devices = librenms.list_devices()
         logging.info("Found %s LibreNMS devices to process", len(devices))
         for device in devices:
