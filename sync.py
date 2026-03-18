@@ -21,6 +21,20 @@ def env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def describe_http_error(response: requests.Response) -> str:
+    text = response.text.strip()
+    if not text:
+        return ""
+    try:
+        detail = json.dumps(response.json(), ensure_ascii=False, sort_keys=True)
+    except ValueError:
+        detail = text
+    detail = " ".join(detail.split())
+    if len(detail) > 500:
+        detail = detail[:497] + "..."
+    return detail
+
+
 @dataclass
 class Settings:
     librenms_url: str
@@ -151,11 +165,19 @@ class GLPIClient:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "librenms-glpi-sync/1.0"})
+        self.session.headers.update(
+            {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "librenms-glpi-sync/1.0",
+            }
+        )
+        if settings.glpi_app_token:
+            self.session.headers["App-Token"] = settings.glpi_app_token
         self.session_token: str | None = None
 
     def _request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
-        headers = kwargs.pop("headers", {})
+        headers = dict(kwargs.pop("headers", {}))
         if self.session_token:
             headers["Session-Token"] = self.session_token
         response = self.session.request(
@@ -166,7 +188,17 @@ class GLPIClient:
             timeout=self.settings.request_timeout,
             **kwargs,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            detail = describe_http_error(response)
+            if detail:
+                raise requests.HTTPError(
+                    f"{exc}. GLPI response: {detail}",
+                    request=response.request,
+                    response=response,
+                ) from exc
+            raise
         return response
 
     def init_session(self) -> None:
@@ -183,8 +215,6 @@ class GLPIClient:
             if not self.settings.glpi_user_token:
                 raise RuntimeError("GLPI token auth selected but GLPI_USER_TOKEN is missing")
             headers = {"Authorization": f"user_token {self.settings.glpi_user_token}"}
-            if self.settings.glpi_app_token:
-                headers["App-Token"] = self.settings.glpi_app_token
             response = self._request("GET", "/apirest.php/initSession/", headers=headers)
         else:
             raise RuntimeError(f"Unsupported GLPI_AUTH_METHOD: {auth_method}")

@@ -92,6 +92,7 @@ Use this first if you want the least friction:
 
 ```env
 GLPI_AUTH_METHOD=basic
+GLPI_APP_TOKEN=your_app_token_if_glpi_requires_it
 GLPI_USERNAME=librenms-sync
 GLPI_PASSWORD=your_password
 ```
@@ -154,12 +155,15 @@ LIBRENMS_TOKEN=replace_with_librenms_api_token
 GLPI_URL=https://glpi.example.com
 GLPI_VERIFY_TLS=true
 GLPI_AUTH_METHOD=basic
+GLPI_APP_TOKEN=your_app_token_if_glpi_requires_it
 GLPI_USERNAME=librenms-sync
 GLPI_PASSWORD=replace_with_glpi_password
 
 GLPI_ENTITY_ID=1
 STATE_FILE=/var/lib/librenms-glpi-sync/state.json
 ```
+
+If your GLPI API configuration has an application token set, you must pass `GLPI_APP_TOKEN` even when using `GLPI_AUTH_METHOD=basic`.
 
 If you are testing against a hostname/IP with a certificate mismatch:
 
@@ -257,11 +261,16 @@ GLPI_USERNAME=
 GLPI_PASSWORD=
 ```
 
+### Required when GLPI API enforces app tokens
+
+```env
+GLPI_APP_TOKEN=
+```
+
 ### Required for token auth
 
 ```env
 GLPI_USER_TOKEN=
-GLPI_APP_TOKEN=
 ```
 
 ### Useful optional values
@@ -335,7 +344,17 @@ GLPI_AUTH_METHOD=basic
 
 Once the sync is working, revisit token auth.
 
-### 3) Device gets imported into the wrong GLPI type
+### 3) HTTP 400 on `initSession`
+
+This usually means GLPI rejected the login request before the sync even started.
+
+Check these first:
+
+- if GLPI API is configured with an application token, set `GLPI_APP_TOKEN` even in basic auth mode
+- if GLPI disables credential login, change to `GLPI_AUTH_METHOD=token`
+- run `sudo /opt/librenms-glpi-sync/scripts/test_glpi_api.sh` and compare the returned GLPI error code/message
+
+### 4) Device gets imported into the wrong GLPI type
 
 Edit:
 
@@ -343,7 +362,7 @@ Edit:
 GLPI_TYPE_MAP=server=Computer,network=NetworkEquipment,firewall=NetworkEquipment
 ```
 
-### 4) You only want one device while testing
+### 5) You only want one device while testing
 
 Use:
 
