@@ -26,9 +26,23 @@ def describe_http_error(response: requests.Response) -> str:
     if not text:
         return ""
     try:
-        detail = json.dumps(response.json(), ensure_ascii=False, sort_keys=True)
+        payload = response.json()
     except ValueError:
         detail = text
+    else:
+        if isinstance(payload, list) and payload and all(isinstance(item, str) for item in payload):
+            detail = ": ".join(payload[:2])
+        elif isinstance(payload, dict):
+            error = payload.get("ERROR") or payload.get("error")
+            message = payload.get("MESSAGE") or payload.get("message")
+            if error and message:
+                detail = f"{error}: {message}"
+            elif error:
+                detail = str(error)
+            else:
+                detail = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        else:
+            detail = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     detail = " ".join(detail.split())
     if len(detail) > 500:
         detail = detail[:497] + "..."
@@ -49,6 +63,7 @@ class Settings:
     glpi_password: str
     glpi_user_token: str
     glpi_app_token: str
+    glpi_profile_id: int | None
     glpi_entity_id: int | None
     glpi_default_itemtype: str
     glpi_type_map: dict[str, str]
@@ -77,6 +92,8 @@ class Settings:
 
         entity_id_raw = os.environ.get("GLPI_ENTITY_ID", "").strip()
         entity_id = int(entity_id_raw) if entity_id_raw else None
+        profile_id_raw = os.environ.get("GLPI_PROFILE_ID", "").strip()
+        profile_id = int(profile_id_raw) if profile_id_raw else None
 
         return cls(
             librenms_url=os.environ["LIBRENMS_URL"].rstrip("/"),
@@ -91,6 +108,7 @@ class Settings:
             glpi_password=os.environ.get("GLPI_PASSWORD", ""),
             glpi_user_token=os.environ.get("GLPI_USER_TOKEN", ""),
             glpi_app_token=os.environ.get("GLPI_APP_TOKEN", ""),
+            glpi_profile_id=profile_id,
             glpi_entity_id=entity_id,
             glpi_default_itemtype=os.environ.get("GLPI_DEFAULT_ITEMTYPE", "NetworkEquipment"),
             glpi_type_map=type_map,
@@ -234,6 +252,16 @@ class GLPIClient:
             json={"entities_id": self.settings.glpi_entity_id, "is_recursive": True},
         )
         logging.info("Using GLPI active entity %s", self.settings.glpi_entity_id)
+
+    def set_active_profile(self) -> None:
+        if self.settings.glpi_profile_id is None:
+            return
+        self._request(
+            "POST",
+            "/apirest.php/changeActiveProfile/",
+            json={"profiles_id": self.settings.glpi_profile_id},
+        )
+        logging.info("Using GLPI active profile %s", self.settings.glpi_profile_id)
 
     def kill_session(self) -> None:
         if not self.session_token:
@@ -461,6 +489,7 @@ def main() -> int:
 
     glpi.init_session()
     try:
+        glpi.set_active_profile()
         glpi.set_active_entity()
         devices = librenms.list_devices()
         logging.info("Found %s LibreNMS devices to process", len(devices))

@@ -93,6 +93,7 @@ Use this first if you want the least friction:
 ```env
 GLPI_AUTH_METHOD=basic
 GLPI_APP_TOKEN=your_app_token_if_glpi_requires_it
+GLPI_PROFILE_ID=your_profile_id_if_the_user_has_multiple_profiles
 GLPI_USERNAME=librenms-sync
 GLPI_PASSWORD=your_password
 ```
@@ -156,6 +157,7 @@ GLPI_URL=https://glpi.example.com
 GLPI_VERIFY_TLS=true
 GLPI_AUTH_METHOD=basic
 GLPI_APP_TOKEN=your_app_token_if_glpi_requires_it
+GLPI_PROFILE_ID=
 GLPI_USERNAME=librenms-sync
 GLPI_PASSWORD=replace_with_glpi_password
 
@@ -164,6 +166,7 @@ STATE_FILE=/var/lib/librenms-glpi-sync/state.json
 ```
 
 If your GLPI API configuration has an application token set, you must pass `GLPI_APP_TOKEN` even when using `GLPI_AUTH_METHOD=basic`.
+If the GLPI user has multiple profiles, set `GLPI_PROFILE_ID` so the sync switches into the profile that has asset create/update rights before processing devices.
 If `GLPI_ENTITY_ID` is set, the sync changes the active GLPI entity to that ID before searching or creating assets.
 
 If you are testing against a hostname/IP with a certificate mismatch:
@@ -278,6 +281,7 @@ GLPI_USER_TOKEN=
 
 ```env
 ONLY_HOST=
+GLPI_PROFILE_ID=
 GLPI_ENTITY_ID=1
 GLPI_DEFAULT_ITEMTYPE=NetworkEquipment
 GLPI_TYPE_MAP=server=Computer,network=NetworkEquipment,firewall=NetworkEquipment
@@ -353,7 +357,7 @@ Check these first:
 
 - if GLPI API is configured with an application token, set `GLPI_APP_TOKEN` even in basic auth mode
 - if GLPI disables credential login, change to `GLPI_AUTH_METHOD=token`
-- run `sudo /opt/librenms-glpi-sync/scripts/test_glpi_api.sh` and compare the returned GLPI error code/message
+- run `sudo /opt/librenms-glpi-sync/scripts/test_glpi_api.sh` and confirm the active profile and entity are the ones you expect
 
 ### 4) `ERROR_GLPI_ADD` while creating `Computer` or `NetworkEquipment`
 
@@ -361,11 +365,12 @@ This means GLPI core rejected the asset creation request.
 
 Check these first:
 
+- `GLPI_PROFILE_ID` points to a profile that can create and update assets through the API
 - the GLPI user can create that asset type in the target entity
 - `GLPI_ENTITY_ID` points to the entity where the user has rights
 - `files/_logs` on the GLPI server for the exact core-side validation error
 
-The sync now switches the active entity with `changeActiveEntities` before processing and exits with a non-zero status if any device fails.
+The sync now switches the active profile and active entity before processing and exits with a non-zero status if any device fails.
 
 ### 5) Device gets imported into the wrong GLPI type
 
