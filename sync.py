@@ -30,23 +30,23 @@ def describe_http_error(response: requests.Response) -> str:
     except ValueError:
         detail = text
     else:
-        if isinstance(payload, list) and payload and all(isinstance(item, str) for item in payload):
-            detail = ": ".join(payload[:2])
+        if isinstance(payload, list) and len(payload) >= 2 and isinstance(payload[0], str) and isinstance(payload[1], str):
+            return f"{payload[0]}: {payload[1]}"
+        elif isinstance(payload, list) and payload and all(isinstance(item, str) for item in payload):
+            return ": ".join(payload)
         elif isinstance(payload, dict):
             error = payload.get("ERROR") or payload.get("error")
             message = payload.get("MESSAGE") or payload.get("message")
             if error and message:
-                detail = f"{error}: {message}"
+                return f"{error}: {message}"
             elif error:
-                detail = str(error)
-            else:
-                detail = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        else:
-            detail = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    detail = " ".join(detail.split())
-    if len(detail) > 500:
-        detail = detail[:497] + "..."
-    return detail
+                return str(error)
+        
+        # Fallback: return formatted JSON on multiple lines so journalctl won't truncate it horizontally
+    try:
+        return "\n" + json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    except Exception:
+        return text
 
 
 @dataclass
@@ -211,10 +211,9 @@ class GLPIClient:
         except requests.HTTPError as exc:
             detail = describe_http_error(response)
             if detail:
+                # Omit the full URL to avoid leaking the hostname in logs
                 raise requests.HTTPError(
-                    f"{exc}. GLPI response: {detail}",
-                    request=response.request,
-                    response=response,
+                    f"{response.status_code} Error on {method} {path}. GLPI response: {detail}"
                 ) from exc
             raise
         return response
