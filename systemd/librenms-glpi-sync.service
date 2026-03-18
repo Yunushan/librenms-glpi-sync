@@ -1,0 +1,16 @@
+[Unit]
+Description=Sync LibreNMS device availability into GLPI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=__ENV_FILE__
+ExecStart=__INSTALL_DIR__/venv/bin/python __INSTALL_DIR__/sync.py
+WorkingDirectory=__INSTALL_DIR__
+User=root
+Group=root
+
+# Uncomment if you want logs to land in dedicated files instead of journald only
+# StandardOutput=append:/var/log/librenms-glpi-sync.log
+# StandardError=append:/var/log/librenms-glpi-sync.log
