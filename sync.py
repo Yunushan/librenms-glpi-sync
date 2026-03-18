@@ -225,6 +225,16 @@ class GLPIClient:
             return
         raise RuntimeError(f"Unexpected initSession response: {data}")
 
+    def set_active_entity(self) -> None:
+        if self.settings.glpi_entity_id is None:
+            return
+        self._request(
+            "POST",
+            "/apirest.php/changeActiveEntities/",
+            json={"entities_id": self.settings.glpi_entity_id, "is_recursive": True},
+        )
+        logging.info("Using GLPI active entity %s", self.settings.glpi_entity_id)
+
     def kill_session(self) -> None:
         if not self.session_token:
             return
@@ -258,7 +268,7 @@ class GLPIClient:
     def create_item(self, itemtype: str, payload: dict[str, Any]) -> int:
         response = self._request(
             "POST",
-            f"/apirest.php/{itemtype}",
+            f"/apirest.php/{itemtype}/",
             headers={"Content-Type": "application/json"},
             json={"input": payload},
         )
@@ -447,20 +457,32 @@ def main() -> int:
     librenms = LibreNMSClient(settings)
     glpi = GLPIClient(settings)
     state = load_state(settings.state_file)
+    failures = 0
 
     glpi.init_session()
     try:
+        glpi.set_active_entity()
         devices = librenms.list_devices()
         logging.info("Found %s LibreNMS devices to process", len(devices))
         for device in devices:
             try:
                 sync_device(settings, librenms, glpi, state, device)
             except Exception as exc:  # noqa: BLE001
-                logging.exception("Failed to sync device_id=%s: %s", device.get("device_id"), exc)
+                failures += 1
+                logging.exception(
+                    "Failed to sync device_id=%s hostname=%s: %s",
+                    device.get("device_id"),
+                    device.get("hostname") or device.get("sysName"),
+                    exc,
+                )
         if not settings.dry_run:
             save_state(settings.state_file, state)
     finally:
         glpi.kill_session()
+
+    if failures:
+        logging.error("Done with %s failed device(s)", failures)
+        return 1
 
     logging.info("Done")
     return 0

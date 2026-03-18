@@ -164,6 +164,7 @@ STATE_FILE=/var/lib/librenms-glpi-sync/state.json
 ```
 
 If your GLPI API configuration has an application token set, you must pass `GLPI_APP_TOKEN` even when using `GLPI_AUTH_METHOD=basic`.
+If `GLPI_ENTITY_ID` is set, the sync changes the active GLPI entity to that ID before searching or creating assets.
 
 If you are testing against a hostname/IP with a certificate mismatch:
 
@@ -354,7 +355,19 @@ Check these first:
 - if GLPI disables credential login, change to `GLPI_AUTH_METHOD=token`
 - run `sudo /opt/librenms-glpi-sync/scripts/test_glpi_api.sh` and compare the returned GLPI error code/message
 
-### 4) Device gets imported into the wrong GLPI type
+### 4) `ERROR_GLPI_ADD` while creating `Computer` or `NetworkEquipment`
+
+This means GLPI core rejected the asset creation request.
+
+Check these first:
+
+- the GLPI user can create that asset type in the target entity
+- `GLPI_ENTITY_ID` points to the entity where the user has rights
+- `files/_logs` on the GLPI server for the exact core-side validation error
+
+The sync now switches the active entity with `changeActiveEntities` before processing and exits with a non-zero status if any device fails.
+
+### 5) Device gets imported into the wrong GLPI type
 
 Edit:
 
@@ -362,7 +375,7 @@ Edit:
 GLPI_TYPE_MAP=server=Computer,network=NetworkEquipment,firewall=NetworkEquipment
 ```
 
-### 5) You only want one device while testing
+### 6) You only want one device while testing
 
 Use:
 
