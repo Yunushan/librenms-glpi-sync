@@ -1,27 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ -z "${ENV_FILE:-}" ]]; then
-  ENV_FILE="/etc/librenms-glpi-sync.env"
+ENV_FILE="${ENV_FILE:-/etc/librenms-glpi-sync.env}"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Missing env file: $ENV_FILE" >&2
+  exit 1
 fi
 
-set -a
+# shellcheck disable=SC1090
 source "$ENV_FILE"
-set +a
 
-curl_args=(--silent --show-error)
-if [[ "${GLPI_VERIFY_TLS:-true}" != "true" ]]; then
-  curl_args+=(--insecure)
+CURL_OPTS=(-sS)
+if [[ "${GLPI_VERIFY_TLS:-true}" == "false" ]]; then
+  CURL_OPTS+=(-k)
 fi
 
 if [[ "${GLPI_AUTH_METHOD:-basic}" == "basic" ]]; then
-  curl "${curl_args[@]}" -u "${GLPI_USERNAME}:${GLPI_PASSWORD}" \
-    "${GLPI_URL%/}/apirest.php/initSession/"
+  curl "${CURL_OPTS[@]}" -X GET \
+    -H "App-Token: ${GLPI_APP_TOKEN}" \
+    -u "${GLPI_USERNAME}:${GLPI_PASSWORD}" \
+    "${GLPI_URL}/apirest.php/initSession"
 else
-  headers=(-H "Authorization: user_token ${GLPI_USER_TOKEN}")
-  if [[ -n "${GLPI_APP_TOKEN:-}" ]]; then
-    headers+=(-H "App-Token: ${GLPI_APP_TOKEN}")
-  fi
-  curl "${curl_args[@]}" "${headers[@]}" \
-    "${GLPI_URL%/}/apirest.php/initSession/"
+  curl "${CURL_OPTS[@]}" -X GET \
+    -H "App-Token: ${GLPI_APP_TOKEN}" \
+    -H "Authorization: user_token ${GLPI_USER_TOKEN}" \
+    "${GLPI_URL}/apirest.php/initSession"
 fi
